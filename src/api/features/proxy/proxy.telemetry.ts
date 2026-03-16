@@ -1,3 +1,7 @@
+import {
+  parseAnthropicJSONResponse,
+  parseAnthropicSSEResponse,
+} from "@/api/features/anthropic/anthropic.stream";
 import { getLangfuseClient } from "@/api/lib/langfuse";
 import config from "@/config";
 import {
@@ -30,8 +34,12 @@ export async function reportToLangfuse(
   const isError = ctx.statusCode >= 400;
   const parsed = isJsonResponse
     ? ctx.isStreaming
-      ? parseSSEResponse(text)
-      : parseJSONResponse(text)
+      ? ctx.provider === "anthropic"
+        ? parseAnthropicSSEResponse(text)
+        : parseSSEResponse(text)
+      : ctx.provider === "anthropic"
+        ? parseAnthropicJSONResponse(text)
+        : parseJSONResponse(text)
     : { model: null, content: null, usage: null, raw: null };
 
   let input: unknown;

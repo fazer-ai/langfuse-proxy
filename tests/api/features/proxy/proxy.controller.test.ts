@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 import { proxyController } from "@/api/features/proxy/proxy.controller";
+import logger from "@/api/lib/logger";
 import config from "@/config";
 
 // Spin up a minimal upstream mock server
@@ -136,7 +137,9 @@ describe("proxyController", () => {
 
   test("returns 502 for unreachable upstream", async () => {
     const originalUrl = config.upstreamBaseUrl;
+    const originalLevel = logger.level;
     config.upstreamBaseUrl = "http://localhost:1";
+    logger.level = "silent";
     try {
       const app = createApp();
       const res = await app.handle(
@@ -148,6 +151,7 @@ describe("proxyController", () => {
       expect(data.error.code).toBe("connection_error");
     } finally {
       config.upstreamBaseUrl = originalUrl;
+      logger.level = originalLevel;
     }
   });
 

@@ -13,6 +13,9 @@ const {
   LANGFUSE_PUBLIC_KEY,
   LANGFUSE_SECRET_KEY,
   TELEMETRY_MAX_BODY_BYTES,
+  ANTHROPIC_BASE_URL,
+  ANTHROPIC_API_KEY,
+  ANTHROPIC_VERSION,
 } = process.env;
 
 const config = {
@@ -33,6 +36,9 @@ const config = {
   telemetryMaxBodyBytes: TELEMETRY_MAX_BODY_BYTES
     ? Number(TELEMETRY_MAX_BODY_BYTES)
     : 1_048_576,
+  anthropicBaseUrl: ANTHROPIC_BASE_URL || "https://api.anthropic.com",
+  anthropicApiKey: ANTHROPIC_API_KEY || "",
+  anthropicVersion: ANTHROPIC_VERSION || "2023-06-01",
 };
 
 export default config;

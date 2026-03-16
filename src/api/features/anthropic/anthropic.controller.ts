@@ -1,33 +1,15 @@
 import crypto from "node:crypto";
 import Elysia from "elysia";
+import {
+  reportErrorToLangfuse,
+  reportToLangfuse,
+} from "@/api/features/proxy/proxy.telemetry";
+import type { ProxyRequestContext } from "@/api/features/proxy/proxy.types";
 import { jsonError, timingSafeEqual } from "@/api/lib/http";
 import logger from "@/api/lib/logger";
 import config from "@/config";
-import { reportErrorToLangfuse, reportToLangfuse } from "./proxy.telemetry";
-import type { ProxyRequestContext } from "./proxy.types";
 
-function injectStreamUsage(bodyText: string): string {
-  try {
-    const body = JSON.parse(bodyText);
-    if (body.stream === true) {
-      body.stream_options = {
-        ...body.stream_options,
-        include_usage: true,
-      };
-      return JSON.stringify(body);
-    }
-    return bodyText;
-  } catch {
-    return bodyText;
-  }
-}
-
-const FORWARDED_REQUEST_HEADERS = [
-  "content-type",
-  "accept",
-  "openai-organization",
-  "openai-project",
-];
+const FORWARDED_REQUEST_HEADERS = ["content-type", "accept", "anthropic-beta"];
 
 function buildUpstreamHeaders(
   original: Headers,
@@ -42,19 +24,31 @@ function buildUpstreamHeaders(
     if (value) headers[name] = value;
   }
 
-  // Authorization: use upstream key override if set, otherwise forward original
-  if (config.upstreamApiKey) {
-    headers.authorization = `Bearer ${config.upstreamApiKey}`;
+  // anthropic-version: prefer request header, fall back to config
+  headers["anthropic-version"] =
+    original.get("anthropic-version") || config.anthropicVersion;
+
+  // x-api-key: use config override if set, else forward request's x-api-key,
+  // or extract token from Authorization: Bearer ...
+  if (config.anthropicApiKey) {
+    headers["x-api-key"] = config.anthropicApiKey;
   } else {
-    const auth = original.get("authorization");
-    if (auth) headers.authorization = auth;
+    const apiKey = original.get("x-api-key");
+    if (apiKey) {
+      headers["x-api-key"] = apiKey;
+    } else {
+      const auth = original.get("authorization");
+      if (auth?.startsWith("Bearer ")) {
+        headers["x-api-key"] = auth.slice(7);
+      }
+    }
   }
 
   return headers;
 }
 
-const FORWARDED_RESPONSE_HEADERS = ["content-type"];
-const RESPONSE_HEADER_PREFIXES = ["x-ratelimit-", "openai-"];
+const FORWARDED_RESPONSE_HEADERS = ["content-type", "request-id"];
+const RESPONSE_HEADER_PREFIXES = ["anthropic-"];
 
 function buildResponseHeaders(
   upstream: Headers,
@@ -82,17 +76,21 @@ function buildResponseHeaders(
   return headers;
 }
 
-export const proxyController = new Elysia({ prefix: "/v1" }).all(
-  "/*",
-  async ({ request, params }) => {
+export const anthropicController = new Elysia({ prefix: "/v1" }).all(
+  "/messages",
+  async ({ request }) => {
     const startTime = performance.now();
     const traceId = request.headers.get("x-request-id") || crypto.randomUUID();
 
     // 1. Auth gate
     if (config.proxyApiKey) {
       const authHeader = request.headers.get("authorization") || "";
+      const apiKeyHeader = request.headers.get("x-api-key") || "";
       const expected = `Bearer ${config.proxyApiKey}`;
-      if (!timingSafeEqual(authHeader, expected)) {
+      const keyMatch =
+        timingSafeEqual(authHeader, expected) ||
+        timingSafeEqual(apiKeyHeader, config.proxyApiKey);
+      if (!keyMatch) {
         return jsonError(
           "Invalid proxy API key",
           "auth_error",
@@ -111,17 +109,15 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
     if (request.method !== "GET" && request.method !== "HEAD") {
       if (isJsonRequest) {
         bodyTextForTelemetry = await request.text();
-        bodyForUpstream = injectStreamUsage(bodyTextForTelemetry);
+        bodyForUpstream = bodyTextForTelemetry;
       } else {
-        // Binary/multipart: forward stream directly
         bodyForUpstream = request.body;
       }
     }
 
-    // 3. Build upstream URL (preserve query string)
-    const upstreamPath = (params as Record<string, string>)["*"];
+    // 3. Build upstream URL
     const url = new URL(request.url);
-    const upstreamUrl = `${config.upstreamBaseUrl}/v1/${upstreamPath}${url.search}`;
+    const upstreamUrl = `${config.anthropicBaseUrl}/v1/messages${url.search}`;
 
     // 4. Build upstream headers
     const upstreamHeaders = buildUpstreamHeaders(request.headers, traceId);
@@ -155,7 +151,7 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
       reportErrorToLangfuse({
         traceId,
         startTime,
-        path: `/v1/${upstreamPath}`,
+        path: "/v1/messages",
         requestBody: bodyTextForTelemetry || "",
         error: message,
       });
@@ -184,13 +180,13 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
       traceId,
       startTime,
       method: request.method,
-      path: `/v1/${upstreamPath}`,
+      path: "/v1/messages",
       requestBody: bodyTextForTelemetry || "",
       contentType,
       isStreaming,
       statusCode: upstreamRes.status,
       latencyMs,
-      provider: "openai",
+      provider: "anthropic",
     };
     reportToLangfuse(telemetryStream, ctx).catch((err) =>
       logger.error({ err }, "Langfuse telemetry failed"),

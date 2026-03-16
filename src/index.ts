@@ -34,6 +34,7 @@ logger.info(
         omitKeys: [
           "upstreamApiKey",
           "proxyApiKey",
+          "anthropicApiKey",
           "langfusePublicKey",
           "langfuseSecretKey",
         ],
