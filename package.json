@@ -36,7 +36,7 @@
     "bun-plugin-tailwind": "^0.1.2",
     "elysia": "1.4.25",
     "elysia-helmet": "^3.0.0",
-    "elysia-rate-limit": "^4.5.0",
+    "elysia-rate-limit": "^4.5.1",
     "i18next": "^25.8.14",
     "lucide-react": "^0.577.0",
     "pino": "^10.3.1",
