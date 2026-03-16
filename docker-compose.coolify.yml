@@ -1,58 +1,23 @@
-version: '3'
-
 services:
-  bun-elysia-react-tailwind:
-    image: 'ghcr.io/fazer-ai/bun-elysia-react-tailwind:latest'
+  langfuse-proxy:
+    image: 'ghcr.io/fazer-ai/langfuse-proxy:latest'
     pull_policy: always
-    volumes:
-      - 'storage:/app/storage'
     environment:
-      - SERVICE_URL_BUN_ELYSIA_REACT_TAILWIND
       - NODE_ENV=production
       - PORT=${PORT:-3000}
-      - PUBLIC_URL=${SERVICE_URL_BUN_ELYSIA_REACT_TAILWIND}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - JWT_SECRET=${SERVICE_PASSWORD_64_JWTSECRET}
-      - CORS_ORIGIN=${CORS_ORIGIN:-*}
-      - CDN_URL=${SERVICE_URL_BUN_ELYSIA_REACT_TAILWIND}
-      - DATABASE_HOST=${DATABASE_HOST:-postgres}
-      - DATABASE_PORT=${DATABASE_PORT:-5432}
-      - DATABASE_USER=${SERVICE_USER_DBUSER}
-      - DATABASE_PASSWORD=${SERVICE_PASSWORD_64_DBPASSWORD}
-      - DATABASE_NAME=${DATABASE_NAME:-bun_elysia_react_tailwind}
-      - 'DATABASE_URL=postgres://${SERVICE_USER_DBUSER}:${SERVICE_PASSWORD_64_DBPASSWORD}@${DATABASE_HOST:-postgres}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-bun_elysia_react_tailwind}'
-    command:
-      - sh
-      - '-c'
-      - 'bun prisma migrate deploy && exec ./server'
+      - UPSTREAM_BASE_URL=${UPSTREAM_BASE_URL:-https://api.openai.com}
+      - UPSTREAM_API_KEY=${UPSTREAM_API_KEY}
+      - PROXY_API_KEY=${PROXY_API_KEY}
+      - PROXY_TIMEOUT_MS=${PROXY_TIMEOUT_MS:-300000}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - TELEMETRY_MAX_BODY_BYTES=${TELEMETRY_MAX_BODY_BYTES:-1048576}
+    command: ['./server']
     restart: always
     healthcheck:
-      test:
-        - CMD-SHELL
-        - 'wget -qO- http://localhost:3000/api/health'
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/api/health']
       interval: 20s
       timeout: 10s
       retries: 5
-    depends_on:
-      postgres:
-        condition: service_healthy
-  postgres:
-    image: 'postgres:17-alpine'
-    restart: always
-    volumes:
-      - 'postgres:/var/lib/postgresql/data'
-    environment:
-      - POSTGRES_DB=${DATABASE_NAME:-bun_elysia_react_tailwind}
-      - POSTGRES_USER=${SERVICE_USER_DBUSER}
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_64_DBPASSWORD}
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -h localhost -p 5432 -U $${POSTGRES_USER} -d $${POSTGRES_DB}'
-      interval: 20s
-      timeout: 20s
-      retries: 10
-
-volumes:
-  storage:
-  postgres:

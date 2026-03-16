@@ -35,8 +35,3 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 tmp/*
 !tmp/.keep
-
-/generated/prisma
-
-# Wrangler local state
-.wrangler

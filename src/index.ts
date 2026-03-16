@@ -1,3 +1,4 @@
+import { shutdownLangfuse } from "@/api/lib/langfuse";
 import logger, { deepSanitizeObject } from "@/api/lib/logger";
 import app from "@/app";
 import config from "@/config";
@@ -30,7 +31,12 @@ logger.info(
     deepSanitizeObject(
       { ...config, port },
       {
-        omitKeys: ["apiKey", "secret", "jwtSecret", "databaseUrl"],
+        omitKeys: [
+          "upstreamApiKey",
+          "proxyApiKey",
+          "langfusePublicKey",
+          "langfuseSecretKey",
+        ],
       },
     ),
     null,
@@ -40,3 +46,18 @@ logger.info(
 logger.info(
   `${config.packageInfo.name}@${config.packageInfo.version} running on http://${app.server?.hostname}:${app.server?.port}`,
 );
+
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  logger.info("%s received, shutting down gracefully...", signal);
+  app.server?.stop();
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+  await shutdownLangfuse();
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

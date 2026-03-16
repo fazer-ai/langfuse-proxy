@@ -1,17 +1,5 @@
 import Elysia from "elysia";
-import prisma from "@/api/lib/prisma";
 import config from "@/config";
-
-type DbHealth = { ok: true } | { ok: false; error: string };
-
-async function checkDb(): Promise<DbHealth> {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: String(err) };
-  }
-}
 
 export const healthController = new Elysia({ prefix: "/health" }).get(
   "/",
@@ -21,11 +9,24 @@ export const healthController = new Elysia({ prefix: "/health" }).get(
       version: config.packageInfo.version,
     };
 
-    const db = await checkDb();
+    let upstream: "ok" | "unreachable" = "ok";
+    try {
+      const res = await fetch(`${config.upstreamBaseUrl}/v1/models`, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(3000),
+        headers: config.upstreamApiKey
+          ? { Authorization: `Bearer ${config.upstreamApiKey}` }
+          : {},
+      });
+      if (!res.ok) upstream = "unreachable";
+    } catch {
+      upstream = "unreachable";
+    }
+
     return {
       ...base,
-      status: db.ok ? "ok" : "degraded",
-      db,
+      status: upstream === "ok" ? "ok" : "degraded",
+      upstream,
     };
   },
 );

@@ -1,52 +1,45 @@
 # CLAUDE.md
 
-This is a full-stack TypeScript template using **Bun + Elysia + React 19 + Tailwind CSS v4** with JWT auth, Prisma/PostgreSQL, i18n, and Biome tooling.
-
-## Applying this template to a new project
-
-1. Create a new repo from this template and clone it
-2. `bun install`
-3. `bun setup` — renames all references (`package.json`, env vars, database identifiers) from `bun-elysia-react-tailwind` to your repo's directory name
-4. Update `public/index.html` — change the `<title>` to your project name
-5. Remove pages you don't need:
-   - **Signup page**: delete `src/client/pages/SignupPage.tsx`, remove its route from `src/client/App.tsx`, and remove the `/api/auth/signup` endpoint in `src/api/features/auth/`
-   - **Admin page**: delete `src/client/pages/AdminPage.tsx`, remove its route from `src/client/App.tsx`, and remove `src/api/features/admin/` along with its mount in `src/app.ts`
-6. Re-generate this file with `/init` to get a CLAUDE.md tailored to your new project
+This is a Bun + Elysia proxy service that forwards OpenAI-compatible API requests to upstream LLM providers and sends telemetry to Langfuse.
 
 ## Common commands
 
-| Command | Description |
-|---|---|
-| `bun dev` | Start dev server with hot reload (port 3000) |
-| `bun build` | Build frontend assets to `dist/` |
-| `bun test` | Run tests with coverage |
-| `bun lint` | Lint with Biome |
-| `bun format` | Format with Biome |
-| `bun check` | Lint + type-check + i18n + tests |
-| `bun prisma:migrate` | Run database migrations |
-| `bun prisma:generate` | Generate Prisma client |
-| `bun set-admin <email> [password]` | Promote a user to admin (creates the user if it doesn't exist; optionally sets password) |
+| Command      | Description                                  |
+| ------------ | -------------------------------------------- |
+| `bun dev`    | Start dev server with hot reload (port 3000) |
+| `bun test`   | Run tests with coverage                      |
+| `bun lint`   | Lint with Biome                              |
+| `bun format` | Format with Biome                            |
+| `bun check`  | Lint + type-check + tests (pre-commit hook)  |
 
 ## Project layout
 
-- `src/api/` — Elysia backend (features/, lib/, middlewares/)
-- `src/client/` — React frontend (pages/, components/, contexts/, lib/, locales/)
-- `src/app.ts` — Elysia app setup
-- `src/config.ts` — Environment config
-- `prisma/` — Schema and migrations
-- `public/` — Static assets and `index.html`
-- `scripts/` — `setup.ts` (template init), `set-admin.ts`
-- `build.ts` — Custom build script with Tailwind plugin
+- `src/api/features/proxy/` — Core proxy: catch-all `/v1/*` controller, SSE stream parser, Langfuse telemetry
+- `src/api/features/health/` — `GET /api/health` with upstream reachability check
+- `src/api/lib/langfuse.ts` — Langfuse client singleton, no-ops when credentials not set
+- `src/api/lib/logger.ts` — Pino logger (pretty-print in dev, JSON in prod)
+- `src/app.ts` — Elysia app setup: logging, JSON error responses, route mounting
+- `src/config.ts` — All env vars parsed here, no env access elsewhere
+- `src/index.ts` — Server startup with port retry, graceful shutdown (SIGTERM/SIGINT → drain → flush Langfuse)
 
-## Frontend architecture
+## Architecture
 
-- `ProtectedRoute` wraps children in `<Layout>` — page components must NOT wrap themselves in `<Layout>`, they render content only
-- Only `ProtectedRoute` (in `src/client/components/ProtectedRoute.tsx`) should render `<Layout>` — it is the single source of the app shell (header, nav, main content area)
+- Single catch-all `ALL /v1/*` forwards any OpenAI-compatible request to upstream
+- `ReadableStream.tee()` splits response: one branch to client immediately, other consumed for background telemetry
+- Telemetry stream MUST always be fully drained (even if Langfuse disabled) to avoid backpressure on client stream
+- `stream_options.include_usage` injected into streaming request bodies so Langfuse gets token counts
+- `usageDetails` sends full OpenAI token breakdown (cached, audio, reasoning tokens) to Langfuse
+- `completionStartTime` sent to Langfuse for TTFB tracking separate from total duration
+- Optional `PROXY_API_KEY` gate with `crypto.timingSafeEqual` comparison
+- `UPSTREAM_API_KEY` overrides consumer's Authorization header if set
+- Request ID: preserves consumer's `X-Request-ID` or generates UUID, used as Langfuse trace ID
+- Client disconnect aborts upstream fetch via AbortController to prevent orphaned streams
+- Non-JSON requests (multipart/binary) forwarded as raw streams, telemetry captures metadata only
 
 ## Code style
 
 - Biome for linting and formatting (2-space indent, LF line endings)
 - Path alias: `@/` maps to `src/`
-- **Cursor styles**: `cursor: pointer` is set globally on `button`, `select`, `[role="button"]` in `public/index.css` — never use `cursor-pointer` on individual elements. Only use cursor utilities for overrides like `cursor-not-allowed` on disabled states.
-- Strict TypeScript
-- Husky pre-commit hooks run lint, type-check, and tests
+- Strict TypeScript with `noUncheckedIndexedAccess`
+- Husky pre-commit hook runs `bun check` (lint + type-check + tests)
+- No frontend, no database, no auth middleware — pure proxy service

@@ -7,7 +7,7 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "tests/**/*.{ts,tsx}"]
+    "includes": ["src/**/*.ts", "tests/**/*.ts"]
   },
   "formatter": {
     "enabled": true,
@@ -16,13 +16,11 @@
     "lineEnding": "lf"
   },
   "linter": {
-    "includes": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "tests/**/*.{ts,tsx}"],
+    "includes": ["src/**/*.ts", "tests/**/*.ts"],
     "enabled": true,
     "rules": {
       "recommended": true,
-      "nursery": {
-        "useSortedClasses": "on"
-      }
+      "nursery": {}
     }
   },
   "javascript": {
