@@ -1,0 +1,172 @@
+name: Publish Docker image to GitHub packages
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+
+env:
+  GITHUB_REPO: ghcr.io/${{ github.repository }}
+
+jobs:
+  upload-assets:
+    runs-on: ubuntu-latest
+    if: vars.R2_BUCKET_NAME != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun prisma generate
+        env:
+          DATABASE_URL: 'postgres://localhost:5432/dummy'
+
+      - name: Build frontend assets
+        run: bun run build
+        env:
+          NODE_ENV: production
+          BUN_PUBLIC_CDN_URL: ${{ secrets.BUN_PUBLIC_CDN_URL }}
+
+      - name: Upload assets to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -eo pipefail
+          echo "📦 Uploading assets from dist/ to R2..."
+          cd dist
+          find . -type f | while IFS= read -r file; do
+            key="${file#./}"
+            echo "Uploading $key"
+            bunx wrangler r2 object put "${{ vars.R2_BUCKET_NAME }}/$key" --file "$file" --remote
+          done
+          echo "✅ All assets uploaded"
+
+      - name: Deploy CDN Worker
+        if: vars.CDN_WORKER_DISABLED != 'true'
+        run: bunx wrangler deploy
+        working-directory: workers/cdn
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  build:
+    needs: upload-assets
+    if: always() && (needs.upload-assets.result == 'success' || needs.upload-assets.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    env:
+      GIT_REF: ${{ github.head_ref || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Update package.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/}
+          echo "Updating package.json version to $TAG_VERSION"
+          npm version "$TAG_VERSION" --no-git-tag-version
+
+      - name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push to GitHub Container Registry
+        id: build-ghcr
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+            BUN_PUBLIC_CDN_URL=${{ secrets.BUN_PUBLIC_CDN_URL }}
+          tags: |
+            ${{ env.GITHUB_REPO }}:latest
+            ${{ env.GITHUB_REPO }}:${{ github.sha }}
+            ${{ env.GITHUB_REPO }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build-ghcr.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          GIT_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository }}:latest \
+            -t ghcr.io/${{ github.repository }}:${{ github.sha }} \
+            -t ghcr.io/${{ github.repository }}:${GIT_REF} \
+            $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
+
+      - name: Inspect image
+        env:
+          GIT_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          REPO="ghcr.io/${{ github.repository }}"
+          docker buildx imagetools inspect ${REPO}:latest
+          docker buildx imagetools inspect ${REPO}:${{ github.sha }}
+          docker buildx imagetools inspect ${REPO}:${GIT_REF}

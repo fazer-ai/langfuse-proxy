@@ -1,0 +1,11 @@
+{
+  "errors": {
+    "cannotDemoteSelf": "Não é possível rebaixar a si mesmo",
+    "emailInUse": "Email já está em uso",
+    "forbidden": "Acesso negado",
+    "invalidCredentials": "Email ou senha inválidos",
+    "rateLimitExceeded": "Limite de requisições excedido. Tente novamente mais tarde.",
+    "unauthorized": "Não autorizado",
+    "userNotFound": "Usuário não encontrado"
+  }
+}

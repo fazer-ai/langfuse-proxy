@@ -1,0 +1,54 @@
+{
+  "admin": {
+    "actions": "Ações",
+    "admins": "Administradores",
+    "cannotDemoteSelf": "Não é possível rebaixar a si mesmo",
+    "createdAt": "Criado em",
+    "demote": "Rebaixar",
+    "email": "Email",
+    "lastLogin": "Último Login",
+    "name": "Nome",
+    "promote": "Promover",
+    "role": "Função",
+    "roleUpdated": "Função atualizada para {{role}}",
+    "roleUpdateFailed": "Falha ao atualizar função",
+    "searchUsers": "Buscar usuários por email...",
+    "title": "Painel Administrativo",
+    "totalUsers": "Total de Usuários"
+  },
+  "auth": {
+    "confirmPassword": "Confirmar Senha",
+    "createAccount": "Criar Conta",
+    "creatingAccount": "Criando conta...",
+    "email": "Email",
+    "emailPlaceholder": "seu@email.com",
+    "genericError": "Algo deu errado. Tente novamente.",
+    "hasAccount": "Já tem uma conta?",
+    "loggingIn": "Entrando...",
+    "login": "Entrar",
+    "loginFailed": "Falha ao entrar",
+    "logout": "Sair",
+    "noAccount": "Não tem uma conta?",
+    "password": "Senha",
+    "passwordMinLength": "Deve ter pelo menos 8 caracteres",
+    "passwordsNoMatch": "As senhas não coincidem",
+    "signup": "Cadastrar",
+    "signupFailed": "Falha ao cadastrar"
+  },
+  "common": {
+    "hidePassword": "Esconder senha",
+    "next": "Próximo",
+    "pageOf": "{{page}} de {{total}}",
+    "previous": "Anterior",
+    "search": "Buscar",
+    "showPassword": "Mostrar senha"
+  },
+  "home": {
+    "role": "Função: {{role}}",
+    "welcome": "Bem-vindo, {{email}}!"
+  },
+  "nav": {
+    "admin": "Admin",
+    "home": "Início"
+  }
+}
