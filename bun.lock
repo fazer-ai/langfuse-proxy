@@ -11,7 +11,7 @@
         "@elysiajs/jwt": "^1.4.1",
         "@elysiajs/static": "^1.4.7",
         "@prisma/adapter-pg": "^7.4.2",
-        "@prisma/client": "^7.4.2",
+        "@prisma/client": "^7.5.0",
         "bun-plugin-tailwind": "^0.1.2",
         "elysia": "1.4.25",
         "elysia-helmet": "^3.0.0",
@@ -193,9 +193,9 @@
 
     "@prisma/adapter-pg": ["@prisma/adapter-pg@7.4.2", "", { "dependencies": { "@prisma/driver-adapter-utils": "7.4.2", "pg": "^8.16.3", "postgres-array": "3.0.4" } }, "sha512-oUo2Zhe9Tf6YwVL8kLPuOLTK1Z2pwi/Ua77t2PuGyBan2w7shRKqHvYK+3XXmRH9RWhPJ4SMtHZKpNo6Ax/4bQ=="],
 
-    "@prisma/client": ["@prisma/client@7.4.2", "", { "dependencies": { "@prisma/client-runtime-utils": "7.4.2" }, "peerDependencies": { "prisma": "*", "typescript": ">=5.4.0" }, "optionalPeers": ["prisma", "typescript"] }, "sha512-ts2mu+cQHriAhSxngO3StcYubBGTWDtu/4juZhXCUKOwgh26l+s4KD3vT2kMUzFyrYnll9u/3qWrtzRv9CGWzA=="],
+    "@prisma/client": ["@prisma/client@7.5.0", "", { "dependencies": { "@prisma/client-runtime-utils": "7.5.0" }, "peerDependencies": { "prisma": "*", "typescript": ">=5.4.0" }, "optionalPeers": ["prisma", "typescript"] }, "sha512-h4hF9ctp+kSRs7ENHGsFQmHAgHcfkOCxbYt6Ti9Xi8x7D+kP4tTi9x51UKmiTH/OqdyJAO+8V+r+JA5AWdav7w=="],
 
-    "@prisma/client-runtime-utils": ["@prisma/client-runtime-utils@7.4.2", "", {}, "sha512-cID+rzOEb38VyMsx5LwJMEY4NGIrWCNpKu/0ImbeooQ2Px7TI+kOt7cm0NelxUzF2V41UVVXAmYjANZQtCu1/Q=="],
+    "@prisma/client-runtime-utils": ["@prisma/client-runtime-utils@7.5.0", "", {}, "sha512-KnJ2b4Si/pcWEtK68uM+h0h1oh80CZt2suhLTVuLaSKg4n58Q9jBF/A42Kw6Ma+aThy1yAhfDeTC0JvEmeZnFQ=="],
 
     "@prisma/config": ["@prisma/config@7.4.2", "", { "dependencies": { "c12": "3.1.0", "deepmerge-ts": "7.1.5", "effect": "3.18.4", "empathic": "2.0.0" } }, "sha512-CftBjWxav99lzY1Z4oDgomdb1gh9BJFAOmWF6P2v1xRfXqQb56DfBub+QKcERRdNoAzCb3HXy3Zii8Vb4AsXhg=="],
 
