@@ -60,7 +60,7 @@
     "husky": "^9.1.7",
     "i18next-parser": "^9.4.0",
     "pino-caller": "^4.0.0",
-    "prisma": "^7.4.2"
+    "prisma": "^7.5.0"
   },
   "peerDependencies": {
     "typescript": "^5"
