@@ -15,7 +15,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 # Only run if there are uncommitted changes to files that bun check cares about
 changed_files=$(git diff --name-only HEAD 2>/dev/null; git diff --name-only --cached 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null)
-relevant=$(echo "$changed_files" | grep -E '\.(ts|tsx|js|jsx|json|css|prisma)$' | head -1)
+relevant=$(echo "$changed_files" | grep -E '\.(ts|tsx|js|jsx|json|css)$' | head -1)
 
 if [ -z "$relevant" ]; then
   echo '{"ok": true}'

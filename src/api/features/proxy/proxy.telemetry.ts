@@ -2,6 +2,10 @@ import {
   parseAnthropicJSONResponse,
   parseAnthropicSSEResponse,
 } from "@/api/features/anthropic/anthropic.stream";
+import {
+  parseGeminiJSONResponse,
+  parseGeminiSSEResponse,
+} from "@/api/features/gemini/gemini.stream";
 import { getLangfuseClient } from "@/api/lib/langfuse";
 import config from "@/config";
 import {
@@ -9,7 +13,23 @@ import {
   parseJSONResponse,
   parseSSEResponse,
 } from "./proxy.stream";
-import type { ProxyRequestContext } from "./proxy.types";
+import type { ParsedResponse, ProxyRequestContext } from "./proxy.types";
+
+function selectParser(
+  provider: string | undefined,
+  isStreaming: boolean,
+): (raw: string) => ParsedResponse {
+  switch (provider) {
+    case "anthropic":
+      return isStreaming
+        ? parseAnthropicSSEResponse
+        : parseAnthropicJSONResponse;
+    case "gemini":
+      return isStreaming ? parseGeminiSSEResponse : parseGeminiJSONResponse;
+    default:
+      return isStreaming ? parseSSEResponse : parseJSONResponse;
+  }
+}
 
 export async function reportToLangfuse(
   telemetryStream: ReadableStream<Uint8Array>,
@@ -33,13 +53,7 @@ export async function reportToLangfuse(
 
   const isError = ctx.statusCode >= 400;
   const parsed = isJsonResponse
-    ? ctx.isStreaming
-      ? ctx.provider === "anthropic"
-        ? parseAnthropicSSEResponse(text)
-        : parseSSEResponse(text)
-      : ctx.provider === "anthropic"
-        ? parseAnthropicJSONResponse(text)
-        : parseJSONResponse(text)
+    ? selectParser(ctx.provider, ctx.isStreaming)(text)
     : { model: null, content: null, usage: null, raw: null };
 
   let input: unknown;

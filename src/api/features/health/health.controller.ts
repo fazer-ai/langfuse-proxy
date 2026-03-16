@@ -42,8 +42,24 @@ export const healthController = new Elysia({ prefix: "/health" }).get(
       }
     }
 
+    let gemini: "ok" | "unreachable" | "not_configured" = "not_configured";
+    if (config.geminiApiKey) {
+      gemini = "ok";
+      try {
+        const res = await fetch(`${config.geminiBaseUrl}/v1beta/models`, {
+          signal: AbortSignal.timeout(3000),
+          headers: { "x-goog-api-key": config.geminiApiKey },
+        });
+        if (res.status >= 500) gemini = "unreachable";
+      } catch {
+        gemini = "unreachable";
+      }
+    }
+
     const allOk =
-      openai === "ok" && (anthropic === "ok" || anthropic === "not_configured");
+      openai === "ok" &&
+      (anthropic === "ok" || anthropic === "not_configured") &&
+      (gemini === "ok" || gemini === "not_configured");
 
     return {
       ...base,
@@ -51,6 +67,7 @@ export const healthController = new Elysia({ prefix: "/health" }).get(
       upstream: {
         openai,
         anthropic,
+        gemini,
       },
     };
   },

@@ -1,6 +1,7 @@
 import Elysia from "elysia";
 import api from "@/api";
 import { anthropicController } from "@/api/features/anthropic/anthropic.controller";
+import { geminiController } from "@/api/features/gemini/gemini.controller";
 import { proxyController } from "@/api/features/proxy/proxy.controller";
 import logger from "@/api/lib/logger";
 
@@ -37,6 +38,7 @@ const app = new Elysia()
   })
   .group("/api", (app) => app.use(api))
   .use(anthropicController)
+  .use(geminiController)
   .use(proxyController);
 
 export type App = typeof app;

@@ -22,10 +22,11 @@ describe("healthController", () => {
       const res = await app.handle(new Request("http://localhost/health"));
 
       const data = (await res.json()) as {
-        upstream: { openai: string; anthropic: string };
+        upstream: { openai: string; anthropic: string; gemini: string };
       };
       expect(data.upstream).toHaveProperty("openai");
       expect(data.upstream).toHaveProperty("anthropic");
+      expect(data.upstream).toHaveProperty("gemini");
     });
   });
 });

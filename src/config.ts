@@ -16,6 +16,8 @@ const {
   ANTHROPIC_BASE_URL,
   ANTHROPIC_API_KEY,
   ANTHROPIC_VERSION,
+  GEMINI_BASE_URL,
+  GEMINI_API_KEY,
 } = process.env;
 
 const config = {
@@ -39,6 +41,8 @@ const config = {
   anthropicBaseUrl: ANTHROPIC_BASE_URL || "https://api.anthropic.com",
   anthropicApiKey: ANTHROPIC_API_KEY || "",
   anthropicVersion: ANTHROPIC_VERSION || "2023-06-01",
+  geminiBaseUrl: GEMINI_BASE_URL || "https://generativelanguage.googleapis.com",
+  geminiApiKey: GEMINI_API_KEY || "",
 };
 
 export default config;

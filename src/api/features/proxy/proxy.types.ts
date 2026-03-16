@@ -8,7 +8,7 @@ export interface ProxyRequestContext {
   isStreaming: boolean;
   statusCode: number;
   latencyMs: number;
-  provider?: "openai" | "anthropic";
+  provider?: "openai" | "anthropic" | "gemini";
 }
 
 export interface ParsedResponse {
