@@ -23,7 +23,7 @@ function detectTags(path: string, input: unknown): string[] {
   if (path.includes("/audio/")) tags.push("audio");
   if (path.includes("/images/")) tags.push("vision");
 
-  // Content-based detection from messages array
+  // Content-based detection from messages array (OpenAI / Anthropic)
   if (input && typeof input === "object" && "messages" in input) {
     const messages = (input as { messages: unknown[] }).messages;
     if (Array.isArray(messages)) {
@@ -42,6 +42,33 @@ function detectTags(path: string, input: unknown): string[] {
           }
           // Anthropic: document (PDF, etc.)
           if (type === "document") {
+            if (!tags.includes("document")) tags.push("document");
+          }
+        }
+      }
+    }
+  }
+
+  // Gemini: contents[].parts[] with inline_data or file_data
+  if (input && typeof input === "object" && "contents" in input) {
+    const contents = (input as { contents: unknown[] }).contents;
+    if (Array.isArray(contents)) {
+      for (const entry of contents) {
+        const parts = (entry as { parts: unknown[] }).parts;
+        if (!Array.isArray(parts)) continue;
+        for (const part of parts) {
+          const p = part as {
+            inline_data?: { mime_type: string };
+            file_data?: { mime_type: string };
+          };
+          const mime = p.inline_data?.mime_type || p.file_data?.mime_type || "";
+          if (mime.startsWith("image/")) {
+            if (!tags.includes("vision")) tags.push("vision");
+          }
+          if (mime.startsWith("audio/")) {
+            if (!tags.includes("audio")) tags.push("audio");
+          }
+          if (mime === "application/pdf") {
             if (!tags.includes("document")) tags.push("document");
           }
         }
