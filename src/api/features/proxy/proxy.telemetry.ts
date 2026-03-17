@@ -22,6 +22,7 @@ function detectTags(path: string, input: unknown): string[] {
   // Path-based detection
   if (path.includes("/audio/")) tags.push("audio");
   if (path.includes("/images/")) tags.push("vision");
+  if (path.includes("/embeddings")) tags.push("embedding");
 
   // Content-based detection from messages array (OpenAI / Anthropic)
   if (input && typeof input === "object" && "messages" in input) {
