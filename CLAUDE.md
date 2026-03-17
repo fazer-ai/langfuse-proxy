@@ -15,6 +15,8 @@ This is a Bun + Elysia proxy service that forwards OpenAI-compatible API request
 ## Project layout
 
 - `src/api/features/proxy/` — Core proxy: catch-all `/v1/*` controller, SSE stream parser, Langfuse telemetry
+- `src/api/features/anthropic/` — Anthropic `/v1/messages` pass-through with provider-specific stream parsing
+- `src/api/features/gemini/` — Gemini `/v1beta/*` pass-through with provider-specific stream parsing
 - `src/api/features/health/` — `GET /api/health` with upstream reachability check
 - `src/api/lib/langfuse.ts` — Langfuse client singleton, no-ops when credentials not set
 - `src/api/lib/logger.ts` — Pino logger (pretty-print in dev, JSON in prod)
