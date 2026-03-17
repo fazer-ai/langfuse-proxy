@@ -5,6 +5,7 @@ export interface ProxyRequestContext {
   path: string;
   requestBody: string;
   contentType: string;
+  responseContentType: string;
   isStreaming: boolean;
   statusCode: number;
   latencyMs: number;

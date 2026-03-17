@@ -112,8 +112,26 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
       if (isJsonRequest) {
         bodyTextForTelemetry = await request.text();
         bodyForUpstream = injectStreamUsage(bodyTextForTelemetry);
+      } else if (contentType.includes("multipart/form-data")) {
+        // Extract text fields for telemetry, forward original stream upstream
+        try {
+          const cloned = request.clone();
+          const formData = await cloned.formData();
+          const fields: Record<string, string> = {};
+          for (const [key, value] of formData.entries()) {
+            if (typeof value === "string") {
+              fields[key] = value;
+            } else {
+              fields[key] = `[file: ${value.name}, ${value.size} bytes]`;
+            }
+          }
+          bodyTextForTelemetry = JSON.stringify(fields);
+        } catch {
+          /* best-effort */
+        }
+        bodyForUpstream = request.body;
       } else {
-        // Binary/multipart: forward stream directly
+        // Binary: forward stream directly
         bodyForUpstream = request.body;
       }
     }
@@ -187,6 +205,8 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
       path: `/v1/${upstreamPath}`,
       requestBody: bodyTextForTelemetry || "",
       contentType,
+      responseContentType:
+        upstreamRes.headers.get("content-type") || "application/octet-stream",
       isStreaming,
       statusCode: upstreamRes.status,
       latencyMs,

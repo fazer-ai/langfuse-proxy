@@ -56,7 +56,7 @@ export function parseJSONResponse(raw: string): ParsedResponse {
     const data = JSON.parse(raw);
     return {
       model: data.model || null,
-      content: data.choices?.[0]?.message?.content || null,
+      content: data.choices?.[0]?.message?.content || data.text || null,
       usage: data.usage || null,
       raw: data,
     };

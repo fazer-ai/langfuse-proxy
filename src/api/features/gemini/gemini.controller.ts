@@ -191,6 +191,8 @@ export const geminiController = new Elysia().all(
       path: `/v1beta/${path}`,
       requestBody: bodyTextForTelemetry || "",
       contentType,
+      responseContentType:
+        upstreamRes.headers.get("content-type") || "application/octet-stream",
       isStreaming,
       statusCode: upstreamRes.status,
       latencyMs,

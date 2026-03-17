@@ -183,6 +183,8 @@ export const anthropicController = new Elysia({ prefix: "/v1" }).all(
       path: "/v1/messages",
       requestBody: bodyTextForTelemetry || "",
       contentType,
+      responseContentType:
+        upstreamRes.headers.get("content-type") || "application/octet-stream",
       isStreaming,
       statusCode: upstreamRes.status,
       latencyMs,

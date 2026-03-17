@@ -15,6 +15,43 @@ import {
 } from "./proxy.stream";
 import type { ParsedResponse, ProxyRequestContext } from "./proxy.types";
 
+/** Derive modality tags from the request path and body. */
+function detectTags(path: string, input: unknown): string[] {
+  const tags: string[] = [];
+
+  // Path-based detection
+  if (path.includes("/audio/")) tags.push("audio");
+  if (path.includes("/images/")) tags.push("vision");
+
+  // Content-based detection from messages array
+  if (input && typeof input === "object" && "messages" in input) {
+    const messages = (input as { messages: unknown[] }).messages;
+    if (Array.isArray(messages)) {
+      for (const msg of messages) {
+        const content = (msg as { content: unknown }).content;
+        if (!Array.isArray(content)) continue;
+        for (const part of content) {
+          const type = (part as { type: string }).type;
+          // OpenAI: image_url | Anthropic: image
+          if (type === "image_url" || type === "image") {
+            if (!tags.includes("vision")) tags.push("vision");
+          }
+          // OpenAI: input_audio
+          if (type === "input_audio") {
+            if (!tags.includes("audio")) tags.push("audio");
+          }
+          // Anthropic: document (PDF, etc.)
+          if (type === "document") {
+            if (!tags.includes("document")) tags.push("document");
+          }
+        }
+      }
+    }
+  }
+
+  return tags;
+}
+
 function selectParser(
   provider: string | undefined,
   isStreaming: boolean,
@@ -49,7 +86,7 @@ export async function reportToLangfuse(
   const totalDurationMs = performance.now() - ctx.startTime;
 
   const isJsonResponse =
-    ctx.contentType.includes("application/json") || ctx.isStreaming;
+    ctx.responseContentType.includes("application/json") || ctx.isStreaming;
 
   const isError = ctx.statusCode >= 400;
   const parsed = isJsonResponse
@@ -68,11 +105,14 @@ export async function reportToLangfuse(
       ? (parsed.raw as Record<string, Record<string, string>>)?.error?.message
       : undefined;
 
+  const tags = detectTags(ctx.path, input);
+
   const trace = langfuse.trace({
     id: ctx.traceId,
     name: ctx.path,
     input,
     output: isError ? parsed.raw : (parsed.content ?? parsed.raw),
+    ...(tags.length > 0 ? { tags } : {}),
     metadata: {
       method: ctx.method,
       statusCode: ctx.statusCode,
