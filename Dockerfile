@@ -31,3 +31,5 @@ COPY --from=build /app/package.json package.json
 RUN mkdir -p /app/logs && chown -R bun:bun /app/logs
 
 EXPOSE 3000
+
+CMD ["./server"]

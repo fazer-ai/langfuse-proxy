@@ -264,14 +264,14 @@ Leave `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` empty to disable telemetry
 
 ```bash
 docker build -t langfuse-proxy .
-docker run -p 3000:3000 --env-file .env langfuse-proxy ./server
+docker run -p 3000:3000 --env-file .env langfuse-proxy
 ```
 
 The Dockerfile uses a multi-stage build that compiles the app to a standalone binary (~50MB image).
 
 ### Coolify
 
-Use `docker-compose.coolify.yml` — configure environment variables in the Coolify dashboard. No database or external services required.
+Deploy using the **Dockerfile** build pack — configure environment variables in the Coolify dashboard. Set the health check to `/api/health` on port 3000 for rolling updates. No database or external services required.
 
 ## Development
 
