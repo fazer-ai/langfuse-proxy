@@ -13,51 +13,7 @@ env:
   GITHUB_REPO: ghcr.io/${{ github.repository }}
 
 jobs:
-  upload-assets:
-    runs-on: ubuntu-latest
-    if: vars.R2_BUCKET_NAME != ''
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build frontend assets
-        run: bun run build
-        env:
-          NODE_ENV: production
-          BUN_PUBLIC_CDN_URL: ${{ secrets.BUN_PUBLIC_CDN_URL }}
-
-      - name: Upload assets to R2
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -eo pipefail
-          echo "📦 Uploading assets from dist/ to R2..."
-          cd dist
-          find . -type f | while IFS= read -r file; do
-            key="${file#./}"
-            echo "Uploading $key"
-            bunx wrangler r2 object put "${{ vars.R2_BUCKET_NAME }}/$key" --file "$file" --remote
-          done
-          echo "✅ All assets uploaded"
-
-      - name: Deploy CDN Worker
-        if: vars.CDN_WORKER_DISABLED != 'true'
-        run: bunx wrangler deploy
-        working-directory: workers/cdn
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
   build:
-    needs: upload-assets
-    if: always() && (needs.upload-assets.result == 'success' || needs.upload-assets.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
@@ -101,8 +57,6 @@ jobs:
           file: Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          build-args: |
-            BUN_PUBLIC_CDN_URL=${{ secrets.BUN_PUBLIC_CDN_URL }}
           tags: |
             ${{ env.GITHUB_REPO }}:latest
             ${{ env.GITHUB_REPO }}:${{ github.sha }}

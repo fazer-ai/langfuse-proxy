@@ -45,3 +45,6 @@ This is a Bun + Elysia proxy service that forwards OpenAI-compatible API request
 - Strict TypeScript with `noUncheckedIndexedAccess`
 - Husky pre-commit hook runs `bun check` (lint + type-check + tests)
 - No frontend, no database, no auth middleware — pure proxy service
+- Only add comments when strictly necessary; always use a tag (`// TODO:`, `// NOTE:`, `// FIXME:`)
+- "fazer.ai" is always lowercase; "fazer-ai" is acceptable in slugs/URLs
+- Check `.env.example` when adding new environment variables
