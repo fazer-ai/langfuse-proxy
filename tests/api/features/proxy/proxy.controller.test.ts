@@ -155,6 +155,25 @@ describe("proxyController", () => {
     }
   });
 
+  test("forwards x-session-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": "sess-abc-123",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("preserves query string", async () => {
     let capturedUrl = "";
     const captureServer = Bun.serve({

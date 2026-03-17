@@ -86,6 +86,7 @@ export const geminiController = new Elysia().all(
   async ({ request, params }) => {
     const startTime = performance.now();
     const traceId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const sessionId = request.headers.get("x-session-id") || undefined;
     const path = (params as Record<string, string>)["*"] || "";
 
     // 1. Auth gate
@@ -186,6 +187,7 @@ export const geminiController = new Elysia().all(
     // 8. Background telemetry (non-blocking)
     const ctx: ProxyRequestContext = {
       traceId,
+      sessionId,
       startTime,
       method: request.method,
       path: `/v1beta/${path}`,

@@ -259,6 +259,28 @@ describe("geminiController", () => {
     expect(res.headers.get("x-request-id")).toBe("my-trace-id");
   });
 
+  test("forwards x-session-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request(
+        "http://localhost/v1beta/models/gemini-2.0-flash:generateContent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "test-key",
+            "x-session-id": "sess-abc-123",
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "Hello" }] }],
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("enforces proxy API key when configured", async () => {
     config.proxyApiKey = "proxy-secret";
     try {

@@ -137,6 +137,7 @@ export async function reportToLangfuse(
 
   const trace = langfuse.trace({
     id: ctx.traceId,
+    sessionId: ctx.sessionId || undefined,
     name: ctx.path,
     input,
     output: isError ? parsed.raw : (parsed.content ?? parsed.raw),

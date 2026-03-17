@@ -81,6 +81,7 @@ export const anthropicController = new Elysia({ prefix: "/v1" }).all(
   async ({ request }) => {
     const startTime = performance.now();
     const traceId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const sessionId = request.headers.get("x-session-id") || undefined;
 
     // 1. Auth gate
     if (config.proxyApiKey) {
@@ -178,6 +179,7 @@ export const anthropicController = new Elysia({ prefix: "/v1" }).all(
     // 8. Background telemetry (non-blocking)
     const ctx: ProxyRequestContext = {
       traceId,
+      sessionId,
       startTime,
       method: request.method,
       path: "/v1/messages",

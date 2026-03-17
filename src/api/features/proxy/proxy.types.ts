@@ -1,5 +1,6 @@
 export interface ProxyRequestContext {
   traceId: string;
+  sessionId?: string;
   startTime: number;
   method: string;
   path: string;

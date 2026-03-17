@@ -241,6 +241,28 @@ describe("anthropicController", () => {
     expect(res.headers.get("x-request-id")).toBe("my-trace-id");
   });
 
+  test("forwards x-session-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "test",
+          "anthropic-version": "2023-06-01",
+          "x-session-id": "sess-abc-123",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("enforces proxy API key when configured", async () => {
     config.proxyApiKey = "test-key";
     try {
