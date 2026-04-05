@@ -1,6 +1,9 @@
 export interface ProxyRequestContext {
   traceId: string;
   sessionId?: string;
+  userId?: string;
+  langfuseTags?: string[];
+  langfuseMetadata?: Record<string, string>;
   startTime: number;
   method: string;
   path: string;

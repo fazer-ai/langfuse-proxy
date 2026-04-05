@@ -198,6 +198,72 @@ describe("anthropicController", () => {
     expect(data._echo?.apiKey).toBe("sk-ant-from-bearer");
   });
 
+  test("forwards x-user-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01",
+          "x-user-id": "tenant-acme",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "test" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-tags without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01",
+          "x-langfuse-tags": "premium, internal",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "test" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-metadata without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": "sk-ant-test",
+          "anthropic-version": "2023-06-01",
+          "x-langfuse-metadata": JSON.stringify({ orgId: "org_123" }),
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "test" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("returns x-request-id header", async () => {
     const app = createApp();
     const res = await app.handle(

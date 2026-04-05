@@ -133,16 +133,18 @@ export async function reportToLangfuse(
       ? (parsed.raw as Record<string, Record<string, string>>)?.error?.message
       : undefined;
 
-  const tags = detectTags(ctx.path, input);
+  const tags = [...detectTags(ctx.path, input), ...(ctx.langfuseTags ?? [])];
 
   const trace = langfuse.trace({
     id: ctx.traceId,
     sessionId: ctx.sessionId || undefined,
+    userId: ctx.userId || undefined,
     name: ctx.path,
     input,
     output: isError ? parsed.raw : (parsed.content ?? parsed.raw),
     ...(tags.length > 0 ? { tags } : {}),
     metadata: {
+      ...ctx.langfuseMetadata,
       method: ctx.method,
       statusCode: ctx.statusCode,
       isStreaming: ctx.isStreaming,
