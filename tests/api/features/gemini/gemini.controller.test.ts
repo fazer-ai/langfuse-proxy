@@ -194,6 +194,72 @@ describe("geminiController", () => {
     expect(data._echo?.apiKey).toBe("bearer-gemini-key");
   });
 
+  test("forwards x-user-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request(
+        "http://localhost/v1beta/models/gemini-2.0-flash:generateContent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "test-key",
+            "x-user-id": "tenant-acme",
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "test" }] }],
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-tags without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request(
+        "http://localhost/v1beta/models/gemini-2.0-flash:generateContent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "test-key",
+            "x-langfuse-tags": "premium, internal",
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "test" }] }],
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-metadata without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request(
+        "http://localhost/v1beta/models/gemini-2.0-flash:generateContent",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": "test-key",
+            "x-langfuse-metadata": JSON.stringify({ orgId: "org_123" }),
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: "test" }] }],
+          }),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("extracts key from x-api-key → x-goog-api-key", async () => {
     const app = createApp();
     const res = await app.handle(

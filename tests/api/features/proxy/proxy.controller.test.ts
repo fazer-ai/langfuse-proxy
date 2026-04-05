@@ -174,6 +174,66 @@ describe("proxyController", () => {
     expect(res.status).toBe(200);
   });
 
+  test("forwards x-user-id without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-id": "tenant-acme",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-tags without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-langfuse-tags": "premium, internal",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test("forwards x-langfuse-metadata without error", async () => {
+    const app = createApp();
+    const res = await app.handle(
+      new Request("http://localhost/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-langfuse-metadata": JSON.stringify({
+            orgId: "org_123",
+            region: "us-east",
+          }),
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [{ role: "user", content: "hello" }],
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   test("preserves query string", async () => {
     let capturedUrl = "";
     const captureServer = Bun.serve({

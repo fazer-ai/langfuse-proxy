@@ -1,6 +1,10 @@
 import crypto from "node:crypto";
 import Elysia from "elysia";
 import { jsonError, timingSafeEqual } from "@/api/lib/http";
+import {
+  parseLangfuseMetadata,
+  parseLangfuseTags,
+} from "@/api/lib/langfuse-headers";
 import logger from "@/api/lib/logger";
 import config from "@/config";
 import { reportErrorToLangfuse, reportToLangfuse } from "./proxy.telemetry";
@@ -88,6 +92,13 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
     const startTime = performance.now();
     const traceId = request.headers.get("x-request-id") || crypto.randomUUID();
     const sessionId = request.headers.get("x-session-id") || undefined;
+    const userId = request.headers.get("x-user-id") || undefined;
+    const langfuseTags = parseLangfuseTags(
+      request.headers.get("x-langfuse-tags"),
+    );
+    const langfuseMetadata = parseLangfuseMetadata(
+      request.headers.get("x-langfuse-metadata"),
+    );
 
     // 1. Auth gate
     if (config.proxyApiKey) {
@@ -202,6 +213,9 @@ export const proxyController = new Elysia({ prefix: "/v1" }).all(
     const ctx: ProxyRequestContext = {
       traceId,
       sessionId,
+      userId,
+      langfuseTags,
+      langfuseMetadata,
       startTime,
       method: request.method,
       path: `/v1/${upstreamPath}`,
