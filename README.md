@@ -271,7 +271,45 @@ The Dockerfile uses a multi-stage build that compiles the app to a standalone bi
 
 ### Coolify
 
-Deploy using the **Dockerfile** build pack — configure environment variables in the Coolify dashboard. Set the health check to `/api/health` on port 3000 for rolling updates. No database or external services required.
+Two ways to deploy on Coolify:
+
+- **Dockerfile build pack**: point Coolify at this repo, configure environment variables in the dashboard, and set `/api/health` on port 3000 as the health check.
+- **Prebuilt image** (recommended when running alongside other Coolify services like n8n): deploy `ghcr.io/fazer-ai/langfuse-proxy:latest` as a Docker Image service on Coolify's predefined network. Other services on the same network reach the proxy via Docker DNS, with no public exposure or TLS needed. See [n8n Integration](#n8n-integration) below for the full recipe.
+
+No database or external services are required either way.
+
+### n8n Integration
+
+A common deployment pairs this proxy with [n8n](https://n8n.io) on Coolify so all LLM calls from n8n workflows are transparently logged to Langfuse.
+
+#### 1. Deploy the proxy on Coolify's internal network
+
+1. On the **n8n** service in Coolify, enable **Connect To Predefined Network** and restart it.
+2. Create a new service of type **Docker Image** using `ghcr.io/fazer-ai/langfuse-proxy:latest`.
+3. Configure environment variables using [.env.example](.env.example) as a template. At minimum, paste your Langfuse public and secret keys from the Langfuse project settings.
+4. Set the health check. Type: `CMD`, Command: `wget -qO- http://localhost:3000/api/health`.
+5. Set **Network Aliases** to `langfuse-proxy` so other services on the network resolve the proxy by that hostname in their credentials.
+
+#### 2. Point n8n credentials at the proxy
+
+Create new LLM credentials in n8n (OpenAI, Anthropic, or Google Gemini) pointing at the proxy:
+
+- **API Key**: the same key you would use against the upstream provider directly. The proxy forwards it.
+- **Base URL**:
+  - OpenAI: `http://langfuse-proxy:3000/v1`
+  - Anthropic: `http://langfuse-proxy:3000`
+  - Gemini: `http://langfuse-proxy:3000/v1beta`
+
+> Editing an existing credential to switch the base URL also works, but is riskier without testing first. Creating a fresh credential and validating end-to-end before swapping nodes over is the safer path.
+
+#### 3. (Optional) Per-tenant tagging in Langfuse
+
+For multi-tenant setups, send `X-User-Id` on every request so traces are grouped per client in Langfuse. On the n8n credential, click **Add Custom Header**:
+
+- Header name: `X-User-Id`
+- Value: a workflow expression resolving to a tenant identifier, e.g. `{{ $('Trigger').item.json.client_id }}`
+
+n8n supports dynamic expressions in credential fields, but the referenced node must exist in **every** workflow that uses the credential, otherwise the expression fails to resolve and requests break. The same applies to `X-Session-Id` (groups related traces in Langfuse) and `X-Request-Id` (used as the Langfuse trace ID).
 
 ## Development
 
