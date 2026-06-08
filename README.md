@@ -2,7 +2,7 @@
 
 A transparent proxy that forwards API requests to upstream LLM providers and sends telemetry to [Langfuse](https://langfuse.com) in the background. Zero latency overhead on the response path.
 
-Supports **OpenAI**, **Anthropic**, and **Google Gemini** APIs natively.
+Supports **OpenAI**, **Anthropic**, **Google Gemini**, and **DeepSeek** APIs natively.
 
 ## Architecture
 
@@ -10,6 +10,7 @@ Supports **OpenAI**, **Anthropic**, and **Google Gemini** APIs natively.
                               +--> Upstream OpenAI    (/v1/*)
 Consumer  -->  Proxy  --------+--> Upstream Anthropic (/v1/messages)
                 |             +--> Upstream Gemini    (/v1beta/*)
+                |             +--> Upstream DeepSeek  (/deepseek/v1/*)
                 |
                 v (background, non-blocking)
              Langfuse
@@ -24,13 +25,14 @@ Consumer  -->  Proxy  --------+--> Upstream Anthropic (/v1/messages)
 
 **Key features:**
 
-- **Multi-provider** — native support for OpenAI, Anthropic, and Gemini APIs with provider-specific stream parsing and telemetry
+- **Multi-provider** — native support for OpenAI, Anthropic, Gemini, and DeepSeek APIs with provider-specific stream parsing and telemetry
 - **Passthrough auth** — consumers send their own API key, proxy forwards it upstream. No user management.
 - **OpenAI catch-all** — `ALL /v1/*` forwards any OpenAI-compatible request. Chat completions, embeddings, audio, images, assistants — all work automatically.
+- **DeepSeek routing** — `ALL /deepseek/v1/*` forwards to DeepSeek, reusing the OpenAI-compatible parsing and telemetry. Point an OpenAI SDK at the `/deepseek/v1` base path; the consumer's key is forwarded.
 - **Streaming support** — SSE streams are split and returned immediately. For OpenAI, the proxy injects `stream_options.include_usage` so Langfuse always gets token counts.
 - **Full telemetry** — every request is logged to Langfuse with input messages, output content, model, full token usage breakdown, TTFB, and total duration.
 - **Optional auth gate** — set `PROXY_API_KEY` to require consumers to authenticate with the proxy itself (timing-safe comparison).
-- **Upstream key override** — set `UPSTREAM_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` to use a single key for all upstream requests regardless of what consumers send.
+- **Upstream key override** — set `UPSTREAM_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `DEEPSEEK_API_KEY` to use a single key for all upstream requests regardless of what consumers send.
 - **Graceful shutdown** — SIGTERM/SIGINT stops accepting connections, waits for in-flight requests, and flushes Langfuse before exiting.
 
 ## Getting Started
@@ -150,6 +152,26 @@ curl "http://localhost:3000/v1beta/models/gemini-2.0-flash:generateContent" \
   -d '{"contents":[{"parts":[{"text":"Hello!"}]}]}'
 ```
 
+### DeepSeek
+
+DeepSeek is OpenAI-compatible. Point any OpenAI SDK at the `/deepseek/v1` base path:
+
+#### Python
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:3000/deepseek/v1",
+    api_key="sk-your-deepseek-key",  # forwarded to upstream
+)
+
+response = client.chat.completions.create(
+    model="deepseek-chat",  # or "deepseek-reasoner"
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+```
+
 ### curl (OpenAI)
 
 ```bash
@@ -174,14 +196,15 @@ curl http://localhost:3000/api/health
 
 ## Endpoints
 
-| Endpoint           | Description                                                      |
-| ------------------ | ---------------------------------------------------------------- |
-| `ALL /v1/messages` | Anthropic pass-through — forwards to Anthropic API               |
-| `ALL /v1beta/*`    | Gemini pass-through — forwards to Gemini API                     |
-| `ALL /v1/*`        | OpenAI catch-all — forwards any request to upstream provider     |
-| `GET /api/health`  | Health check — returns app version and per-provider reachability |
+| Endpoint              | Description                                                         |
+| --------------------- | ------------------------------------------------------------------ |
+| `ALL /v1/messages`    | Anthropic pass-through — forwards to Anthropic API                 |
+| `ALL /v1beta/*`       | Gemini pass-through — forwards to Gemini API                       |
+| `ALL /deepseek/v1/*`  | DeepSeek pass-through (OpenAI-compatible), forwards to DeepSeek API |
+| `ALL /v1/*`           | OpenAI catch-all — forwards any request to upstream provider       |
+| `GET /api/health`     | Health check — returns app version and per-provider reachability   |
 
-> Routes are matched in order: `/v1/messages` is matched before the `/v1/*` catch-all, so Anthropic requests are routed correctly.
+> Routes are matched in order: `/v1/messages` is matched before the `/v1/*` catch-all, so Anthropic requests are routed correctly. The `/deepseek/v1/*` prefix does not overlap `/v1/*`, so its mount order does not matter.
 
 The health endpoint returns per-provider status:
 
@@ -253,6 +276,9 @@ Leave `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` empty to disable telemetry
 | **Gemini**                 |                                                             |                                             |
 | `GEMINI_BASE_URL`          | Gemini API base URL                                         | `https://generativelanguage.googleapis.com` |
 | `GEMINI_API_KEY`           | Override consumer's key for Gemini (optional)               | -                                           |
+| **DeepSeek**               |                                                             |                                             |
+| `DEEPSEEK_BASE_URL`        | DeepSeek API base URL (OpenAI-compatible)                  | `https://api.deepseek.com`                  |
+| `DEEPSEEK_API_KEY`         | Override consumer's key for DeepSeek (optional)             | -                                           |
 | **Langfuse**               |                                                             |                                             |
 | `LANGFUSE_BASE_URL`        | Langfuse instance URL                                       | `https://cloud.langfuse.com`                |
 | `LANGFUSE_PUBLIC_KEY`      | Langfuse public key (empty = telemetry disabled)            | -                                           |
@@ -292,13 +318,14 @@ A common deployment pairs this proxy with [n8n](https://n8n.io) on Coolify so al
 
 #### 2. Point n8n credentials at the proxy
 
-Create new LLM credentials in n8n (OpenAI, Anthropic, or Google Gemini) pointing at the proxy:
+Create new LLM credentials in n8n (OpenAI, Anthropic, or Google Gemini) pointing at the proxy. For DeepSeek, use the OpenAI credential type with the DeepSeek base path below:
 
 - **API Key**: the same key you would use against the upstream provider directly. The proxy forwards it.
 - **Base URL**:
   - OpenAI: `http://langfuse-proxy:3000/v1`
   - Anthropic: `http://langfuse-proxy:3000`
   - Gemini: `http://langfuse-proxy:3000/v1beta`
+  - DeepSeek: `http://langfuse-proxy:3000/deepseek/v1`
 
 > Editing an existing credential to switch the base URL also works, but is riskier without testing first. Creating a fresh credential and validating end-to-end before swapping nodes over is the safer path.
 
@@ -336,8 +363,8 @@ src/
 │   │   │   └── gemini.stream.ts           Gemini stream parsing
 │   │   ├── health/                    # GET /api/health
 │   │   │   └── health.controller.ts       Per-provider reachability checks
-│   │   └── proxy/                     # ALL /v1/*
-│   │       ├── proxy.controller.ts        Catch-all handler, auth gate, header forwarding
+│   │   └── proxy/                     # ALL /v1/* + /deepseek/v1/*
+│   │       ├── proxy.controller.ts        OpenAI-compatible proxy factory (OpenAI + DeepSeek)
 │   │       ├── proxy.stream.ts            Stream consumption, SSE parsing, JSON parsing
 │   │       ├── proxy.telemetry.ts         Background Langfuse reporting (all providers)
 │   │       └── proxy.types.ts             TypeScript interfaces

@@ -18,6 +18,8 @@ const {
   ANTHROPIC_VERSION,
   GEMINI_BASE_URL,
   GEMINI_API_KEY,
+  DEEPSEEK_BASE_URL,
+  DEEPSEEK_API_KEY,
 } = process.env;
 
 const config = {
@@ -43,6 +45,8 @@ const config = {
   anthropicVersion: ANTHROPIC_VERSION || "2023-06-01",
   geminiBaseUrl: GEMINI_BASE_URL || "https://generativelanguage.googleapis.com",
   geminiApiKey: GEMINI_API_KEY || "",
+  deepseekBaseUrl: DEEPSEEK_BASE_URL || "https://api.deepseek.com",
+  deepseekApiKey: DEEPSEEK_API_KEY || "",
 };
 
 export default config;

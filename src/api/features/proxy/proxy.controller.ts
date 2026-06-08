@@ -36,6 +36,7 @@ const FORWARDED_REQUEST_HEADERS = [
 function buildUpstreamHeaders(
   original: Headers,
   traceId: string,
+  apiKeyOverride: string,
 ): Record<string, string> {
   const headers: Record<string, string> = {
     "x-request-id": traceId,
@@ -47,8 +48,8 @@ function buildUpstreamHeaders(
   }
 
   // Authorization: use upstream key override if set, otherwise forward original
-  if (config.upstreamApiKey) {
-    headers.authorization = `Bearer ${config.upstreamApiKey}`;
+  if (apiKeyOverride) {
+    headers.authorization = `Bearer ${apiKeyOverride}`;
   } else {
     const auth = original.get("authorization");
     if (auth) headers.authorization = auth;
@@ -86,156 +87,198 @@ function buildResponseHeaders(
   return headers;
 }
 
-export const proxyController = new Elysia({ prefix: "/v1" }).all(
-  "/*",
-  async ({ request, params }) => {
-    const startTime = performance.now();
-    const traceId = request.headers.get("x-request-id") || crypto.randomUUID();
-    const sessionId = request.headers.get("x-session-id") || undefined;
-    const userId = request.headers.get("x-user-id") || undefined;
-    const langfuseTags = parseLangfuseTags(
-      request.headers.get("x-langfuse-tags"),
-    );
-    const langfuseMetadata = parseLangfuseMetadata(
-      request.headers.get("x-langfuse-metadata"),
-    );
+interface OpenAICompatibleProxyOptions {
+  /** Route prefix this controller listens on (e.g. "/v1" or "/deepseek/v1"). */
+  basePath: string;
+  /** Lazily resolved so config overrides at runtime (tests) take effect. */
+  resolveBaseUrl: () => string;
+  /** Lazily resolved upstream key override; "" forwards consumer's Authorization. */
+  resolveApiKey: () => string;
+  provider: ProxyRequestContext["provider"];
+}
 
-    // 1. Auth gate
-    if (config.proxyApiKey) {
-      const authHeader = request.headers.get("authorization") || "";
-      const expected = `Bearer ${config.proxyApiKey}`;
-      if (!timingSafeEqual(authHeader, expected)) {
-        return jsonError(
-          "Invalid proxy API key",
-          "auth_error",
-          "invalid_api_key",
-          401,
-        );
-      }
-    }
+function createOpenAICompatibleProxy({
+  basePath,
+  resolveBaseUrl,
+  resolveApiKey,
+  provider,
+}: OpenAICompatibleProxyOptions) {
+  return new Elysia({ prefix: basePath }).all(
+    "/*",
+    async ({ request, params }) => {
+      const startTime = performance.now();
+      const traceId =
+        request.headers.get("x-request-id") || crypto.randomUUID();
+      const sessionId = request.headers.get("x-session-id") || undefined;
+      const userId = request.headers.get("x-user-id") || undefined;
+      const langfuseTags = parseLangfuseTags(
+        request.headers.get("x-langfuse-tags"),
+      );
+      const langfuseMetadata = parseLangfuseMetadata(
+        request.headers.get("x-langfuse-metadata"),
+      );
 
-    // 2. Read request body
-    const contentType = request.headers.get("content-type") || "";
-    const isJsonRequest = contentType.includes("application/json");
-    let bodyForUpstream: string | ReadableStream<Uint8Array> | null = null;
-    let bodyTextForTelemetry: string | null = null;
-
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      if (isJsonRequest) {
-        bodyTextForTelemetry = await request.text();
-        bodyForUpstream = injectStreamUsage(bodyTextForTelemetry);
-      } else if (contentType.includes("multipart/form-data")) {
-        // Extract text fields for telemetry, forward original stream upstream
-        try {
-          const cloned = request.clone();
-          const formData = await cloned.formData();
-          const fields: Record<string, string> = {};
-          for (const [key, value] of formData.entries()) {
-            if (typeof value === "string") {
-              fields[key] = value;
-            } else {
-              fields[key] = `[file: ${value.name}, ${value.size} bytes]`;
-            }
-          }
-          bodyTextForTelemetry = JSON.stringify(fields);
-        } catch {
-          /* best-effort */
+      // 1. Auth gate
+      if (config.proxyApiKey) {
+        const authHeader = request.headers.get("authorization") || "";
+        const expected = `Bearer ${config.proxyApiKey}`;
+        if (!timingSafeEqual(authHeader, expected)) {
+          return jsonError(
+            "Invalid proxy API key",
+            "auth_error",
+            "invalid_api_key",
+            401,
+          );
         }
-        bodyForUpstream = request.body;
-      } else {
-        // Binary: forward stream directly
-        bodyForUpstream = request.body;
       }
-    }
 
-    // 3. Build upstream URL (preserve query string)
-    const upstreamPath = (params as Record<string, string>)["*"];
-    const url = new URL(request.url);
-    const upstreamUrl = `${config.upstreamBaseUrl}/v1/${upstreamPath}${url.search}`;
+      // 2. Read request body
+      const contentType = request.headers.get("content-type") || "";
+      const isJsonRequest = contentType.includes("application/json");
+      let bodyForUpstream: string | ReadableStream<Uint8Array> | null = null;
+      let bodyTextForTelemetry: string | null = null;
 
-    // 4. Build upstream headers
-    const upstreamHeaders = buildUpstreamHeaders(request.headers, traceId);
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        if (isJsonRequest) {
+          bodyTextForTelemetry = await request.text();
+          bodyForUpstream = injectStreamUsage(bodyTextForTelemetry);
+        } else if (contentType.includes("multipart/form-data")) {
+          // Extract text fields for telemetry, forward original stream upstream
+          try {
+            const cloned = request.clone();
+            const formData = await cloned.formData();
+            const fields: Record<string, string> = {};
+            for (const [key, value] of formData.entries()) {
+              if (typeof value === "string") {
+                fields[key] = value;
+              } else {
+                fields[key] = `[file: ${value.name}, ${value.size} bytes]`;
+              }
+            }
+            bodyTextForTelemetry = JSON.stringify(fields);
+          } catch {
+            /* best-effort */
+          }
+          bodyForUpstream = request.body;
+        } else {
+          // Binary: forward stream directly
+          bodyForUpstream = request.body;
+        }
+      }
 
-    // 5. Fetch upstream with timeout and client disconnect propagation
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(
-      () => abortController.abort(new DOMException("Timeout", "TimeoutError")),
-      config.proxyTimeoutMs,
-    );
-    request.signal.addEventListener("abort", () => abortController.abort());
+      // 3. Build upstream URL (preserve query string)
+      const upstreamPath = (params as Record<string, string>)["*"];
+      const url = new URL(request.url);
+      const requestPath = `${basePath}/${upstreamPath}`;
+      const upstreamUrl = `${resolveBaseUrl()}/v1/${upstreamPath}${url.search}`;
 
-    let upstreamRes: Response;
-    try {
-      upstreamRes = await fetch(upstreamUrl, {
-        method: request.method,
-        headers: upstreamHeaders,
-        body: bodyForUpstream,
-        signal: abortController.signal,
-      });
-      clearTimeout(timeoutId);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      const isTimeout =
-        err instanceof DOMException && err.name === "TimeoutError";
-      const message = isTimeout
-        ? "Upstream request timed out"
-        : "Upstream connection failed";
-      const code = isTimeout ? "timeout" : "connection_error";
-      logger.error({ err, upstreamUrl }, message);
-      reportErrorToLangfuse({
+      // 4. Build upstream headers
+      const upstreamHeaders = buildUpstreamHeaders(
+        request.headers,
         traceId,
+        resolveApiKey(),
+      );
+
+      // 5. Fetch upstream with timeout and client disconnect propagation
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(
+        () =>
+          abortController.abort(new DOMException("Timeout", "TimeoutError")),
+        config.proxyTimeoutMs,
+      );
+      request.signal.addEventListener("abort", () => abortController.abort());
+
+      let upstreamRes: Response;
+      try {
+        upstreamRes = await fetch(upstreamUrl, {
+          method: request.method,
+          headers: upstreamHeaders,
+          body: bodyForUpstream,
+          signal: abortController.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        const isTimeout =
+          err instanceof DOMException && err.name === "TimeoutError";
+        const message = isTimeout
+          ? "Upstream request timed out"
+          : "Upstream connection failed";
+        const code = isTimeout ? "timeout" : "connection_error";
+        logger.error({ err, upstreamUrl }, message);
+        reportErrorToLangfuse({
+          traceId,
+          startTime,
+          path: requestPath,
+          requestBody: bodyTextForTelemetry || "",
+          error: message,
+        });
+        return jsonError(message, "server_error", code, 502);
+      }
+
+      // 6. Build response
+      const isStreaming =
+        upstreamRes.headers
+          .get("content-type")
+          ?.includes("text/event-stream") ?? false;
+      const latencyMs = performance.now() - startTime;
+      const responseHeaders = buildResponseHeaders(
+        upstreamRes.headers,
+        traceId,
+      );
+
+      if (!upstreamRes.body) {
+        return new Response(null, {
+          status: upstreamRes.status,
+          headers: responseHeaders,
+        });
+      }
+
+      // 7. Tee stream for telemetry
+      const [clientStream, telemetryStream] = upstreamRes.body.tee();
+
+      // 8. Background telemetry (non-blocking)
+      const ctx: ProxyRequestContext = {
+        traceId,
+        sessionId,
+        userId,
+        langfuseTags,
+        langfuseMetadata,
         startTime,
-        path: `/v1/${upstreamPath}`,
+        method: request.method,
+        path: requestPath,
         requestBody: bodyTextForTelemetry || "",
-        error: message,
-      });
-      return jsonError(message, "server_error", code, 502);
-    }
+        contentType,
+        responseContentType:
+          upstreamRes.headers.get("content-type") || "application/octet-stream",
+        isStreaming,
+        statusCode: upstreamRes.status,
+        latencyMs,
+        provider,
+      };
+      reportToLangfuse(telemetryStream, ctx).catch((err) =>
+        logger.error({ err }, "Langfuse telemetry failed"),
+      );
 
-    // 6. Build response
-    const isStreaming =
-      upstreamRes.headers.get("content-type")?.includes("text/event-stream") ??
-      false;
-    const latencyMs = performance.now() - startTime;
-    const responseHeaders = buildResponseHeaders(upstreamRes.headers, traceId);
-
-    if (!upstreamRes.body) {
-      return new Response(null, {
+      // 9. Return response immediately
+      return new Response(clientStream, {
         status: upstreamRes.status,
         headers: responseHeaders,
       });
-    }
+    },
+  );
+}
 
-    // 7. Tee stream for telemetry
-    const [clientStream, telemetryStream] = upstreamRes.body.tee();
+export const proxyController = createOpenAICompatibleProxy({
+  basePath: "/v1",
+  resolveBaseUrl: () => config.upstreamBaseUrl,
+  resolveApiKey: () => config.upstreamApiKey,
+  provider: "openai",
+});
 
-    // 8. Background telemetry (non-blocking)
-    const ctx: ProxyRequestContext = {
-      traceId,
-      sessionId,
-      userId,
-      langfuseTags,
-      langfuseMetadata,
-      startTime,
-      method: request.method,
-      path: `/v1/${upstreamPath}`,
-      requestBody: bodyTextForTelemetry || "",
-      contentType,
-      responseContentType:
-        upstreamRes.headers.get("content-type") || "application/octet-stream",
-      isStreaming,
-      statusCode: upstreamRes.status,
-      latencyMs,
-      provider: "openai",
-    };
-    reportToLangfuse(telemetryStream, ctx).catch((err) =>
-      logger.error({ err }, "Langfuse telemetry failed"),
-    );
-
-    // 9. Return response immediately
-    return new Response(clientStream, {
-      status: upstreamRes.status,
-      headers: responseHeaders,
-    });
-  },
-);
+export const deepseekController = createOpenAICompatibleProxy({
+  basePath: "/deepseek/v1",
+  resolveBaseUrl: () => config.deepseekBaseUrl,
+  resolveApiKey: () => config.deepseekApiKey,
+  provider: "deepseek",
+});

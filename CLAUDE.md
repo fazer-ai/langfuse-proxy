@@ -14,7 +14,7 @@ This is a Bun + Elysia proxy service that forwards OpenAI-compatible API request
 
 ## Project layout
 
-- `src/api/features/proxy/` — Core proxy: catch-all `/v1/*` controller, SSE stream parser, Langfuse telemetry
+- `src/api/features/proxy/` — Core proxy: OpenAI-compatible factory serving the catch-all `/v1/*` (OpenAI) and `/deepseek/v1/*` (DeepSeek) controllers, SSE stream parser, Langfuse telemetry
 - `src/api/features/anthropic/` — Anthropic `/v1/messages` pass-through with provider-specific stream parsing
 - `src/api/features/gemini/` — Gemini `/v1beta/*` pass-through with provider-specific stream parsing
 - `src/api/features/health/` — `GET /api/health` with upstream reachability check
@@ -27,6 +27,7 @@ This is a Bun + Elysia proxy service that forwards OpenAI-compatible API request
 ## Architecture
 
 - Single catch-all `ALL /v1/*` forwards any OpenAI-compatible request to upstream
+- `createOpenAICompatibleProxy` factory builds both the OpenAI (`/v1/*`) and DeepSeek (`/deepseek/v1/*`) controllers; DeepSeek reuses the OpenAI parser/telemetry, only the upstream base URL differs. Base URL/key are resolved lazily so runtime config overrides (tests) take effect
 - `ReadableStream.tee()` splits response: one branch to client immediately, other consumed for background telemetry
 - Telemetry stream MUST always be fully drained (even if Langfuse disabled) to avoid backpressure on client stream
 - `stream_options.include_usage` injected into streaming request bodies so Langfuse gets token counts
