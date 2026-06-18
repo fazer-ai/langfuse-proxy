@@ -25,7 +25,7 @@ jobs:
       GIT_REF: ${{ github.head_ref || github.ref_name }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Update package.json version
         if: startsWith(github.ref, 'refs/tags/')
